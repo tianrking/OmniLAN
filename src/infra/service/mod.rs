@@ -1,13 +1,27 @@
 use crate::domain::config::AppConfig;
 use anyhow::{Context, Result};
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub fn install(cfg: &AppConfig) -> Result<String> {
+pub fn install(cfg: &AppConfig, config_path: &Path) -> Result<String> {
+    let managed_config = cfg.runtime.work_dir.join("omnilan.yaml");
+    if let Some(parent) = managed_config.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    fs::copy(config_path, &managed_config).with_context(|| {
+        format!(
+            "failed to copy config {} -> {}",
+            config_path.display(),
+            managed_config.display()
+        )
+    })?;
+
     #[cfg(target_os = "linux")]
     {
-        let unit = render_systemd_unit(cfg);
+        let unit = render_systemd_unit(cfg, &managed_config);
         let path = "/etc/systemd/system/omnilan.service";
         fs::write(path, unit).context("failed to write systemd unit")?;
         run("systemctl", &["daemon-reload"])?;
@@ -16,7 +30,7 @@ pub fn install(cfg: &AppConfig) -> Result<String> {
     }
     #[cfg(target_os = "macos")]
     {
-        let plist = render_launchd_plist(cfg);
+        let plist = render_launchd_plist(cfg, &managed_config);
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         let path = home.join("Library/LaunchAgents/com.omnilan.agent.plist");
         if let Some(parent) = path.parent() {
@@ -34,8 +48,11 @@ pub fn install(cfg: &AppConfig) -> Result<String> {
     {
         let task_name = "OmniLAN";
         let exe = std::env::current_exe().context("failed to resolve current exe")?;
-        let config = cfg.runtime.work_dir.join("omnilan.yaml");
-        let tr = format!("\"{}\" run -c \"{}\"", exe.display(), config.display());
+        let tr = format!(
+            "\"{}\" run -c \"{}\"",
+            exe.display(),
+            managed_config.display()
+        );
         run(
             "schtasks",
             &[
@@ -74,7 +91,7 @@ pub fn uninstall() -> Result<String> {
 }
 
 #[cfg(target_os = "linux")]
-fn render_systemd_unit(cfg: &AppConfig) -> String {
+fn render_systemd_unit(_cfg: &AppConfig, managed_config: &Path) -> String {
     format!(
         r#"[Unit]
 Description=OmniLAN Gateway Service
@@ -91,12 +108,12 @@ RestartSec=5
 WantedBy=multi-user.target
 "#,
         current_bin(),
-        cfg.runtime.work_dir.join("omnilan.yaml").display()
+        managed_config.display()
     )
 }
 
 #[cfg(target_os = "macos")]
-fn render_launchd_plist(cfg: &AppConfig) -> String {
+fn render_launchd_plist(_cfg: &AppConfig, managed_config: &Path) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -116,7 +133,7 @@ fn render_launchd_plist(cfg: &AppConfig) -> String {
 </plist>
 "#,
         current_bin(),
-        cfg.runtime.work_dir.join("omnilan.yaml").display()
+        managed_config.display()
     )
 }
 

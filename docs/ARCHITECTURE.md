@@ -20,7 +20,7 @@ flowchart TD
 - `src/core/engine/`: 双内核适配（mihomo / sing-box）。
 - `src/core/gateway/`: 网关编排接口（IP 转发/NAT/DNS）。
 - `src/core/enforcement/`: DHCP Assist、Policy Route、回滚脚本输出。
-- `src/infra/platform/`: 操作系统网络能力实现（Linux/macOS/Windows）。
+- `src/infra/platform/`: 操作系统网络能力实现（`linux.rs` / `macos.rs` / `windows.rs`）。
 - `src/infra/service/`: 系统服务安装与卸载（systemd/launchd/task scheduler）。
 - `src/infra/audit/`: 审计日志写入。
 

@@ -20,7 +20,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         Commands::Validate => cmd_validate(&cli.config),
         Commands::Render => cmd_render(&cli.config),
         Commands::Run => cmd_run(&cli.config).await,
-        Commands::Stop => cmd_stop(&cli.config),
+        Commands::Stop { rollback } => cmd_stop(&cli.config, rollback),
         Commands::Status => cmd_status(&cli.config),
         Commands::Audit => cmd_audit(&cli.config),
         Commands::Doctor => cmd_doctor(&cli.config),
@@ -150,7 +150,7 @@ fn cmd_status(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn cmd_stop(config_path: &std::path::Path) -> Result<()> {
+fn cmd_stop(config_path: &std::path::Path, rollback: bool) -> Result<()> {
     let cfg = AppConfig::load(config_path)?;
     let state = RuntimeState::load(&cfg.runtime.state_file)?;
     let pid = state
@@ -158,7 +158,14 @@ fn cmd_stop(config_path: &std::path::Path) -> Result<()> {
         .ok_or_else(|| anyhow!("no child pid recorded in state"))?;
     stop_pid(pid)?;
     crate::infra::audit::log(&cfg, "engine_stopped", &format!("pid={}", pid))?;
+    if rollback {
+        execute_rollback(&std::path::PathBuf::from(&state.rollback_script))?;
+        crate::infra::audit::log(&cfg, "rollback_applied", &state.rollback_script)?;
+    }
     println!("stopped child process: {}", pid);
+    if rollback {
+        println!("rollback complete: {}", state.rollback_script);
+    }
     Ok(())
 }
 
@@ -194,7 +201,7 @@ fn cmd_rollback(config_path: &std::path::Path) -> Result<()> {
 
 fn cmd_service_install(config_path: &std::path::Path) -> Result<()> {
     let cfg = AppConfig::load(config_path)?;
-    let path = service::install(&cfg)?;
+    let path = service::install(&cfg, config_path)?;
     println!("service installed: {}", path);
     Ok(())
 }

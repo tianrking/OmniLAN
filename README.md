@@ -22,6 +22,7 @@ omnilan validate -c omnilan.yaml
 omnilan render -c omnilan.yaml
 sudo omnilan run -c omnilan.yaml
 omnilan stop -c omnilan.yaml
+omnilan stop --rollback -c omnilan.yaml
 omnilan status -c omnilan.yaml
 omnilan audit -c omnilan.yaml
 omnilan doctor -c omnilan.yaml
@@ -70,6 +71,7 @@ sudo ./target/release/omnilan run -c omnilan.yaml
 
 8. `src/infra/service/`
 - systemd / launchd / Windows 任务计划服务管理
+- 安装时自动复制运行配置到 `~/.omnilan/omnilan.yaml`
 
 9. `src/infra/audit/`
 - JSONL 审计日志

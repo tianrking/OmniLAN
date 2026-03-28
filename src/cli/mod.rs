@@ -21,7 +21,10 @@ pub enum Commands {
     Validate,
     Render,
     Run,
-    Stop,
+    Stop {
+        #[arg(long, default_value_t = false)]
+        rollback: bool,
+    },
     Status,
     Audit,
     Doctor,
