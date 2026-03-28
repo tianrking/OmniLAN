@@ -3,6 +3,7 @@ use crate::config::AppConfig;
 use crate::enforcement::{execute_rollback, write_rollback_script, EnforcementOrchestrator};
 use crate::engine::from_config;
 use crate::gateway::GatewayOrchestrator;
+use crate::platform;
 use crate::service;
 use crate::state::RuntimeState;
 use anyhow::{anyhow, Context, Result};
@@ -22,6 +23,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         Commands::Stop => cmd_stop(&cli.config),
         Commands::Status => cmd_status(&cli.config),
         Commands::Audit => cmd_audit(&cli.config),
+        Commands::Doctor => cmd_doctor(&cli.config),
         Commands::ServiceInstall => cmd_service_install(&cli.config),
         Commands::ServiceUninstall => cmd_service_uninstall(),
         Commands::Rollback => cmd_rollback(&cli.config),
@@ -200,6 +202,40 @@ fn cmd_service_install(config_path: &std::path::Path) -> Result<()> {
 fn cmd_service_uninstall() -> Result<()> {
     let path = service::uninstall()?;
     println!("service uninstalled: {}", path);
+    Ok(())
+}
+
+fn cmd_doctor(config_path: &std::path::Path) -> Result<()> {
+    let cfg = AppConfig::load(config_path)?;
+    let caps = platform::capabilities();
+    println!("platform        : {}", caps.os);
+    println!("gateway         : {}", caps.gateway);
+    println!("policy_route_ip : {}", caps.policy_route_ip);
+    println!("policy_route_mac: {}", caps.policy_route_mac);
+    println!("service         : {}", caps.service);
+
+    let engine_bin = match cfg.engine {
+        crate::config::EngineKind::Mihomo => cfg.executables.mihomo.as_str(),
+        crate::config::EngineKind::SingBox => cfg.executables.sing_box.as_str(),
+    };
+    println!(
+        "engine_bin      : {} ({})",
+        engine_bin,
+        platform::command_exists(engine_bin)
+    );
+
+    #[cfg(target_os = "linux")]
+    {
+        println!("iptables        : {}", platform::command_exists("iptables"));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        println!("pfctl           : {}", platform::command_exists("pfctl"));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        println!("netsh           : {}", platform::command_exists("netsh"));
+    }
     Ok(())
 }
 

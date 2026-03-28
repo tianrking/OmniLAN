@@ -24,6 +24,7 @@ sudo omnilan run -c omnilan.yaml
 omnilan stop -c omnilan.yaml
 omnilan status -c omnilan.yaml
 omnilan audit -c omnilan.yaml
+omnilan doctor -c omnilan.yaml
 sudo omnilan service-install -c omnilan.yaml
 sudo omnilan service-uninstall
 sudo omnilan rollback -c omnilan.yaml
@@ -72,7 +73,9 @@ sudo ./target/release/omnilan run -c omnilan.yaml
 
 8. `src/platform.rs`
 - 跨平台网络适配层（Linux/macOS/Windows）
-- Linux 提供完整规则下发；macOS/Windows 预留系统适配接口
+- Linux 提供完整规则下发（iptables）
+- macOS 提供 `pf` anchor 自动规则装载（gateway + policy route）
+- Windows 提供能力探测与服务化，网关策略适配持续完善中
 
 9. `src/service.rs`
 - 系统服务管理：systemd / launchd / Windows 计划任务
@@ -84,6 +87,7 @@ sudo ./target/release/omnilan run -c omnilan.yaml
 - 配置层统一：平台行为不散落在脚本中，便于持续演进
 - 强制接入策略层：`gateway-only / dhcp-assist / policy-route`
 - 跨平台架构：`platform` 适配层统一系统网络操作
+- 运维诊断：`doctor` 命令输出平台能力和关键依赖状态
 
 ## CI
 

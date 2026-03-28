@@ -1,11 +1,63 @@
 use crate::config::AppConfig;
 use anyhow::{Context, Result};
+use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct PlatformApplyResult {
     pub rollback_commands: Vec<String>,
     pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlatformCapabilities {
+    pub os: &'static str,
+    pub gateway: bool,
+    pub policy_route_ip: bool,
+    pub policy_route_mac: bool,
+    pub service: bool,
+}
+
+pub fn capabilities() -> PlatformCapabilities {
+    #[cfg(target_os = "linux")]
+    {
+        return PlatformCapabilities {
+            os: "linux",
+            gateway: true,
+            policy_route_ip: true,
+            policy_route_mac: true,
+            service: true,
+        };
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return PlatformCapabilities {
+            os: "macos",
+            gateway: true,
+            policy_route_ip: true,
+            policy_route_mac: false,
+            service: true,
+        };
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return PlatformCapabilities {
+            os: "windows",
+            gateway: false,
+            policy_route_ip: false,
+            policy_route_mac: false,
+            service: true,
+        };
+    }
+    #[allow(unreachable_code)]
+    PlatformCapabilities {
+        os: "unknown",
+        gateway: false,
+        policy_route_ip: false,
+        policy_route_mac: false,
+        service: false,
+    }
 }
 
 pub fn apply_gateway(cfg: &AppConfig) -> Result<PlatformApplyResult> {
@@ -26,28 +78,23 @@ pub fn apply_gateway(cfg: &AppConfig) -> Result<PlatformApplyResult> {
 }
 
 pub fn apply_policy_target(
-    _cfg: &AppConfig,
+    cfg: &AppConfig,
     ip: &str,
-    _mac: Option<&str>,
+    mac: Option<&str>,
 ) -> Result<PlatformApplyResult> {
     #[cfg(target_os = "linux")]
     {
-        return apply_policy_target_linux(_cfg, ip, _mac);
+        return apply_policy_target_linux(cfg, ip, mac);
     }
     #[cfg(target_os = "macos")]
     {
-        let mut out = PlatformApplyResult::default();
-        out.notes.push(format!(
-            "policy-route target {} requires pf anchor rules on macOS; adapter reserved",
-            ip
-        ));
-        return Ok(out);
+        return apply_policy_target_macos(cfg, ip, mac);
     }
     #[cfg(target_os = "windows")]
     {
         let mut out = PlatformApplyResult::default();
         out.notes.push(format!(
-            "policy-route target {} requires WFP/HNS rules on Windows; adapter reserved",
+            "policy-route target {} requires WFP/HNS rules on Windows; adapter planned",
             ip
         ));
         return Ok(out);
@@ -102,9 +149,46 @@ fn apply_gateway_macos(cfg: &AppConfig) -> Result<PlatformApplyResult> {
         out.rollback_commands
             .push("sysctl -w net.inet.ip.forwarding=0".to_string());
     }
-    out.notes.push(
-        "macOS NAT/policy route should be applied via pf anchor (planned adapter)".to_string(),
-    );
+
+    let iface = detect_macos_interface(cfg)?;
+    let (gateway_rules, policy_rules, combined_rules) = macos_anchor_paths(cfg);
+
+    let mut rules = vec![];
+    if cfg.gateway.auto_nat {
+        rules.push(format!(
+            "nat on {} from {} to any -> ({})",
+            iface, cfg.gateway.lan_cidr, iface
+        ));
+        rules.push(format!(
+            "rdr pass on {} inet proto {{ tcp udp }} from {} to any port 53 -> 127.0.0.1 port {}",
+            iface, cfg.gateway.lan_cidr, cfg.inbound.dns_port
+        ));
+    }
+    fs::create_dir_all(&cfg.runtime.work_dir)
+        .with_context(|| format!("failed to create {}", cfg.runtime.work_dir.display()))?;
+    fs::write(&gateway_rules, rules.join("\n") + "\n")
+        .with_context(|| format!("failed to write {}", gateway_rules.display()))?;
+    // reset policy file each run to avoid stale rules.
+    fs::write(&policy_rules, "")
+        .with_context(|| format!("failed to reset {}", policy_rules.display()))?;
+    merge_macos_anchor_files(&gateway_rules, &policy_rules, &combined_rules)?;
+    run_cmd("pfctl", &["-E"])?;
+    run_cmd(
+        "pfctl",
+        &[
+            "-a",
+            "com.omnilan",
+            "-f",
+            combined_rules.to_string_lossy().as_ref(),
+        ],
+    )?;
+    out.rollback_commands
+        .push("pfctl -a com.omnilan -F all".to_string());
+    out.notes.push(format!(
+        "pf anchor loaded: {} (iface={})",
+        combined_rules.display(),
+        iface
+    ));
     Ok(out)
 }
 
@@ -112,7 +196,7 @@ fn apply_gateway_macos(cfg: &AppConfig) -> Result<PlatformApplyResult> {
 fn apply_gateway_windows(_cfg: &AppConfig) -> Result<PlatformApplyResult> {
     let mut out = PlatformApplyResult::default();
     out.notes
-        .push("Windows adapter: enable forwarding/NAT via netsh/HNS (planned)".to_string());
+        .push("Windows gateway adapter currently not enabled (WFP/HNS planned)".to_string());
     Ok(out)
 }
 
@@ -141,7 +225,6 @@ fn apply_policy_target_linux(
         ),
         &mut out.rollback_commands,
     )?;
-
     for proto in ["udp", "tcp"] {
         maybe_add_rule(
             &format!(
@@ -198,6 +281,101 @@ fn apply_policy_target_linux(
     Ok(out)
 }
 
+#[cfg(target_os = "macos")]
+fn apply_policy_target_macos(
+    cfg: &AppConfig,
+    ip: &str,
+    mac: Option<&str>,
+) -> Result<PlatformApplyResult> {
+    let mut out = PlatformApplyResult::default();
+    let iface = detect_macos_interface(cfg)?;
+    let (gateway_rules, policy_rules, combined_rules) = macos_anchor_paths(cfg);
+
+    let mut existing = fs::read_to_string(&policy_rules).unwrap_or_default();
+    let mut lines = vec![
+        format!(
+            "rdr pass on {} inet proto tcp from {} to any -> 127.0.0.1 port {}",
+            iface, ip, cfg.inbound.redir_port
+        ),
+        format!(
+            "rdr pass on {} inet proto {{ tcp udp }} from {} to any port 53 -> 127.0.0.1 port {}",
+            iface, ip, cfg.inbound.dns_port
+        ),
+    ];
+    if mac.is_some() {
+        out.notes.push(format!(
+            "macOS pf backend ignores MAC matching for {}, using IP-based policy",
+            ip
+        ));
+    }
+    for l in lines.drain(..) {
+        if !existing.contains(&l) {
+            existing.push_str(&l);
+            existing.push('\n');
+            let rollback = format!(
+                "sed -i '' '/{}/d' {}",
+                l.replace('/', "\\/"),
+                policy_rules.display()
+            );
+            out.rollback_commands.push(rollback);
+        }
+    }
+    fs::write(&policy_rules, existing)
+        .with_context(|| format!("failed to write {}", policy_rules.display()))?;
+    merge_macos_anchor_files(&gateway_rules, &policy_rules, &combined_rules)?;
+    run_cmd(
+        "pfctl",
+        &[
+            "-a",
+            "com.omnilan",
+            "-f",
+            combined_rules.to_string_lossy().as_ref(),
+        ],
+    )?;
+    out.notes
+        .push(format!("policy-route applied via pf for {}", ip));
+    Ok(out)
+}
+
+#[cfg(target_os = "macos")]
+fn detect_macos_interface(cfg: &AppConfig) -> Result<String> {
+    if let Some(iface) = &cfg.gateway.interface {
+        return Ok(iface.clone());
+    }
+    let out = Command::new("sh")
+        .arg("-c")
+        .arg("route -n get default | awk '/interface:/{print $2}'")
+        .output()
+        .context("failed to detect macOS default interface")?;
+    let iface = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if iface.is_empty() {
+        anyhow::bail!("unable to detect default interface on macOS");
+    }
+    Ok(iface)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_anchor_paths(cfg: &AppConfig) -> (PathBuf, PathBuf, PathBuf) {
+    (
+        cfg.runtime.work_dir.join("pf.gateway.conf"),
+        cfg.runtime.work_dir.join("pf.policy.conf"),
+        cfg.runtime.work_dir.join("pf.anchor.conf"),
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn merge_macos_anchor_files(
+    gateway_rules: &PathBuf,
+    policy_rules: &PathBuf,
+    combined: &PathBuf,
+) -> Result<()> {
+    let a = fs::read_to_string(gateway_rules).unwrap_or_default();
+    let b = fs::read_to_string(policy_rules).unwrap_or_default();
+    fs::write(combined, format!("{}\n{}", a, b))
+        .with_context(|| format!("failed to write {}", combined.display()))?;
+    Ok(())
+}
+
 #[cfg(target_os = "linux")]
 fn maybe_add_rule(
     check: &str,
@@ -210,6 +388,10 @@ fn maybe_add_rule(
         rollbacks.push(rollback.to_string());
     }
     Ok(())
+}
+
+pub fn command_exists(cmd: &str) -> bool {
+    which::which(cmd).is_ok()
 }
 
 fn run_cmd(cmd: &str, args: &[&str]) -> Result<()> {
