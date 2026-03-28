@@ -370,7 +370,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ok-proxy"
+name = "omnilan"
 version = "0.1.0"
 dependencies = [
  "anyhow",

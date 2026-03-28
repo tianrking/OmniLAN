@@ -1,6 +1,6 @@
-# OK_proxy
+# OmniLAN
 
-`OK_proxy` 是一个用 Rust 实现的新一代局域网代理网关编排器。  
+`OmniLAN` 是一个用 Rust 实现的新一代局域网代理网关编排器。  
 目标是做一个更现代、可扩展、单机高性能的 LAN Gateway 控制层，而不是重复实现代理内核本身。
 
 ## 设计目标
@@ -15,12 +15,14 @@
 ## 当前命令
 
 ```bash
-ok-proxy init
-ok-proxy validate -c ok-proxy.yaml
-ok-proxy render -c ok-proxy.yaml
-sudo ok-proxy run -c ok-proxy.yaml
-ok-proxy status -c ok-proxy.yaml
-sudo ok-proxy rollback -c ok-proxy.yaml
+omnilan init
+omnilan validate -c omnilan.yaml
+omnilan render -c omnilan.yaml
+sudo omnilan run -c omnilan.yaml
+omnilan stop -c omnilan.yaml
+omnilan status -c omnilan.yaml
+omnilan audit -c omnilan.yaml
+sudo omnilan rollback -c omnilan.yaml
 ```
 
 ## 快速开始
@@ -28,10 +30,10 @@ sudo ok-proxy rollback -c ok-proxy.yaml
 ```bash
 cd /Users/w0x7ce/Downloads/OMG——PROXY/OK_proxy
 cargo build --release
-./target/release/ok-proxy init
-cp ok-proxy.example.yaml ok-proxy.yaml
-# 编辑 ok-proxy.yaml，填入 subscription_url 或 local_file
-sudo ./target/release/ok-proxy run -c ok-proxy.yaml
+./target/release/omnilan init
+cp omnilan.example.yaml omnilan.yaml
+# 编辑 omnilan.yaml，填入 subscription_url 或 local_file
+sudo ./target/release/omnilan run -c omnilan.yaml
 ```
 
 运行后，把需要接入的局域网设备网关和 DNS 指向这台电脑，即可无客户端使用代理。
@@ -55,7 +57,7 @@ sudo ./target/release/ok-proxy run -c ok-proxy.yaml
 - 自动输出 rollback 脚本，支持一键撤销
 
 5. `src/app.rs`
-- CLI 命令生命周期：init/validate/render/run/status/rollback
+- CLI 命令生命周期：init/validate/render/run/stop/status/audit/rollback
 - 进程管理、信号退出、状态写入
 
 6. `src/state.rs`

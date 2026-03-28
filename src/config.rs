@@ -127,7 +127,7 @@ pub struct SecurityConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        let base = home.join(".ok-proxy");
+        let base = home.join(".omnilan");
         Self {
             engine: EngineKind::Mihomo,
             runtime: RuntimeConfig {

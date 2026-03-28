@@ -1,5 +1,5 @@
 [package]
-name = "ok-proxy"
+name = "omnilan"
 version = "0.1.0"
 edition = "2021"
 description = "A modern LAN proxy gateway orchestrator powered by Rust"

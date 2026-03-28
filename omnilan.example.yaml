@@ -1,9 +1,9 @@
 engine: mihomo
 
 runtime:
-  work_dir: /Users/yourname/.ok-proxy
-  state_file: /Users/yourname/.ok-proxy/state.json
-  audit_file: /Users/yourname/.ok-proxy/audit.log
+  work_dir: /Users/yourname/.omnilan
+  state_file: /Users/yourname/.omnilan/state.json
+  audit_file: /Users/yourname/.omnilan/audit.log
 
 executables:
   mihomo: mihomo

@@ -3,12 +3,12 @@ use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "ok-proxy",
+    name = "omnilan",
     version,
-    about = "Modern multi-engine LAN proxy gateway"
+    about = "Modern dual-core LAN proxy gateway"
 )]
 pub struct Cli {
-    #[arg(short, long, default_value = "ok-proxy.yaml")]
+    #[arg(short, long, default_value = "omnilan.yaml")]
     pub config: PathBuf,
 
     #[command(subcommand)]
@@ -21,7 +21,9 @@ pub enum Commands {
     Validate,
     Render,
     Run,
+    Stop,
     Status,
+    Audit,
     Rollback,
 }
 
