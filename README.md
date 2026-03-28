@@ -3,6 +3,8 @@
 `OmniLAN` 是一个用 Rust 实现的新一代局域网代理网关编排器。  
 目标是做一个更现代、可扩展、单机高性能的 LAN Gateway 控制层，而不是重复实现代理内核本身。
 
+仓库地址：[https://github.com/tianrking/OmniLAN](https://github.com/tianrking/OmniLAN)
+
 ## 设计目标
 
 - 多引擎：统一入口管理 `mihomo` 和 `sing-box`
@@ -22,6 +24,8 @@ sudo omnilan run -c omnilan.yaml
 omnilan stop -c omnilan.yaml
 omnilan status -c omnilan.yaml
 omnilan audit -c omnilan.yaml
+sudo omnilan service-install -c omnilan.yaml
+sudo omnilan service-uninstall
 sudo omnilan rollback -c omnilan.yaml
 ```
 
@@ -66,12 +70,29 @@ sudo ./target/release/omnilan run -c omnilan.yaml
 7. `src/audit.rs`
 - 审计日志（JSONL），记录策略应用、启动、退出、回滚等事件
 
+8. `src/platform.rs`
+- 跨平台网络适配层（Linux/macOS/Windows）
+- Linux 提供完整规则下发；macOS/Windows 预留系统适配接口
+
+9. `src/service.rs`
+- 系统服务管理：systemd / launchd / Windows 计划任务
+
 ## 内核与扩展
 
 - 双核心支持：`mihomo` / `sing-box`
 - 引擎适配器模式：后续扩展 Hysteria/TUIC/Xray 更直接
 - 配置层统一：平台行为不散落在脚本中，便于持续演进
 - 强制接入策略层：`gateway-only / dhcp-assist / policy-route`
+- 跨平台架构：`platform` 适配层统一系统网络操作
+
+## CI
+
+已内置 GitHub Actions CI：
+
+- Ubuntu + macOS + Windows 三平台矩阵
+- `fmt` / `clippy -D warnings` / `test` / `build --release`
+
+配置文件：`.github/workflows/ci.yml`
 
 ## 强制无感接入能力
 

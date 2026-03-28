@@ -1,5 +1,6 @@
 use crate::audit;
 use crate::config::{AppConfig, DeviceRule, EnforcementMode};
+use crate::platform;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -93,222 +94,18 @@ fn apply_policy_route(cfg: &AppConfig) -> Result<EnforcementResult> {
         return Ok(out);
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        for target in targets {
-            add_tcp_redirect_for_ip(cfg, &target.ip, &mut out)?;
-            add_dns_redirect_for_ip(cfg, &target.ip, &mut out)?;
-            if let Some(mac) = target.mac {
-                add_tcp_redirect_for_mac(cfg, &mac, &mut out)?;
-                add_dns_redirect_for_mac(cfg, &mac, &mut out)?;
-            }
-        }
-        audit::log(
-            cfg,
-            "policy_route_applied",
-            &format!("targets={}", cfg.enforcement.targets.join(",")),
-        )?;
+    for target in targets {
+        let res = platform::apply_policy_target(cfg, &target.ip, target.mac.as_deref())?;
+        out.rollback_commands.extend(res.rollback_commands);
+        out.notes.extend(res.notes);
     }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        out.notes.push(
-            "policy-route auto-apply is currently implemented on linux; skipped on this platform"
-                .to_string(),
-        );
-    }
+    audit::log(
+        cfg,
+        "policy_route_applied",
+        &format!("targets={}", cfg.enforcement.targets.join(",")),
+    )?;
 
     Ok(out)
-}
-
-#[cfg(target_os = "linux")]
-fn add_tcp_redirect_for_ip(cfg: &AppConfig, ip: &str, out: &mut EnforcementResult) -> Result<()> {
-    let check_args = vec![
-        "-t".to_string(),
-        "nat".to_string(),
-        "-C".to_string(),
-        "PREROUTING".to_string(),
-        "-s".to_string(),
-        ip.to_string(),
-        "-p".to_string(),
-        "tcp".to_string(),
-        "-j".to_string(),
-        "REDIRECT".to_string(),
-        "--to-ports".to_string(),
-        cfg.inbound.redir_port.to_string(),
-    ];
-    let add_args = vec![
-        "-t".to_string(),
-        "nat".to_string(),
-        "-A".to_string(),
-        "PREROUTING".to_string(),
-        "-s".to_string(),
-        ip.to_string(),
-        "-p".to_string(),
-        "tcp".to_string(),
-        "-j".to_string(),
-        "REDIRECT".to_string(),
-        "--to-ports".to_string(),
-        cfg.inbound.redir_port.to_string(),
-    ];
-    maybe_add_iptables_rule("iptables", &check_args, &add_args, out)
-}
-
-#[cfg(target_os = "linux")]
-fn add_dns_redirect_for_ip(cfg: &AppConfig, ip: &str, out: &mut EnforcementResult) -> Result<()> {
-    for proto in ["udp", "tcp"] {
-        let check_args = vec![
-            "-t".to_string(),
-            "nat".to_string(),
-            "-C".to_string(),
-            "PREROUTING".to_string(),
-            "-s".to_string(),
-            ip.to_string(),
-            "-p".to_string(),
-            proto.to_string(),
-            "--dport".to_string(),
-            "53".to_string(),
-            "-j".to_string(),
-            "REDIRECT".to_string(),
-            "--to-ports".to_string(),
-            cfg.inbound.dns_port.to_string(),
-        ];
-        let add_args = vec![
-            "-t".to_string(),
-            "nat".to_string(),
-            "-A".to_string(),
-            "PREROUTING".to_string(),
-            "-s".to_string(),
-            ip.to_string(),
-            "-p".to_string(),
-            proto.to_string(),
-            "--dport".to_string(),
-            "53".to_string(),
-            "-j".to_string(),
-            "REDIRECT".to_string(),
-            "--to-ports".to_string(),
-            cfg.inbound.dns_port.to_string(),
-        ];
-        maybe_add_iptables_rule("iptables", &check_args, &add_args, out)?;
-    }
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn add_tcp_redirect_for_mac(cfg: &AppConfig, mac: &str, out: &mut EnforcementResult) -> Result<()> {
-    let check_args = vec![
-        "-t".to_string(),
-        "nat".to_string(),
-        "-C".to_string(),
-        "PREROUTING".to_string(),
-        "-m".to_string(),
-        "mac".to_string(),
-        "--mac-source".to_string(),
-        mac.to_string(),
-        "-p".to_string(),
-        "tcp".to_string(),
-        "-j".to_string(),
-        "REDIRECT".to_string(),
-        "--to-ports".to_string(),
-        cfg.inbound.redir_port.to_string(),
-    ];
-    let add_args = vec![
-        "-t".to_string(),
-        "nat".to_string(),
-        "-A".to_string(),
-        "PREROUTING".to_string(),
-        "-m".to_string(),
-        "mac".to_string(),
-        "--mac-source".to_string(),
-        mac.to_string(),
-        "-p".to_string(),
-        "tcp".to_string(),
-        "-j".to_string(),
-        "REDIRECT".to_string(),
-        "--to-ports".to_string(),
-        cfg.inbound.redir_port.to_string(),
-    ];
-    maybe_add_iptables_rule("iptables", &check_args, &add_args, out)
-}
-
-#[cfg(target_os = "linux")]
-fn add_dns_redirect_for_mac(cfg: &AppConfig, mac: &str, out: &mut EnforcementResult) -> Result<()> {
-    for proto in ["udp", "tcp"] {
-        let check_args = vec![
-            "-t".to_string(),
-            "nat".to_string(),
-            "-C".to_string(),
-            "PREROUTING".to_string(),
-            "-m".to_string(),
-            "mac".to_string(),
-            "--mac-source".to_string(),
-            mac.to_string(),
-            "-p".to_string(),
-            proto.to_string(),
-            "--dport".to_string(),
-            "53".to_string(),
-            "-j".to_string(),
-            "REDIRECT".to_string(),
-            "--to-ports".to_string(),
-            cfg.inbound.dns_port.to_string(),
-        ];
-        let add_args = vec![
-            "-t".to_string(),
-            "nat".to_string(),
-            "-A".to_string(),
-            "PREROUTING".to_string(),
-            "-m".to_string(),
-            "mac".to_string(),
-            "--mac-source".to_string(),
-            mac.to_string(),
-            "-p".to_string(),
-            proto.to_string(),
-            "--dport".to_string(),
-            "53".to_string(),
-            "-j".to_string(),
-            "REDIRECT".to_string(),
-            "--to-ports".to_string(),
-            cfg.inbound.dns_port.to_string(),
-        ];
-        maybe_add_iptables_rule("iptables", &check_args, &add_args, out)?;
-    }
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn maybe_add_iptables_rule(
-    program: &str,
-    check_args: &[String],
-    add_args: &[String],
-    out: &mut EnforcementResult,
-) -> Result<()> {
-    let exists = Command::new(program)
-        .args(check_args)
-        .status()
-        .with_context(|| format!("failed to check rule: {} {:?}", program, check_args))?
-        .success();
-    if !exists {
-        run(program, add_args)?;
-        let mut rollback = add_args.to_vec();
-        if let Some(op) = rollback.get_mut(2) {
-            *op = "-D".to_string();
-        }
-        out.rollback_commands
-            .push(format!("{} {}", program, rollback.join(" ")));
-    }
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn run(cmd: &str, args: &[String]) -> Result<()> {
-    let status = Command::new(cmd)
-        .args(args)
-        .status()
-        .with_context(|| format!("failed to run command: {} {:?}", cmd, args))?;
-    if !status.success() {
-        anyhow::bail!("command failed: {} {:?}", cmd, args);
-    }
-    Ok(())
 }
 
 fn detect_primary_ipv4() -> Result<String> {

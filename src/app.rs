@@ -3,6 +3,7 @@ use crate::config::AppConfig;
 use crate::enforcement::{execute_rollback, write_rollback_script, EnforcementOrchestrator};
 use crate::engine::from_config;
 use crate::gateway::GatewayOrchestrator;
+use crate::service;
 use crate::state::RuntimeState;
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -21,6 +22,8 @@ pub async fn run(cli: Cli) -> Result<()> {
         Commands::Stop => cmd_stop(&cli.config),
         Commands::Status => cmd_status(&cli.config),
         Commands::Audit => cmd_audit(&cli.config),
+        Commands::ServiceInstall => cmd_service_install(&cli.config),
+        Commands::ServiceUninstall => cmd_service_uninstall(),
         Commands::Rollback => cmd_rollback(&cli.config),
     }
 }
@@ -66,6 +69,9 @@ async fn cmd_run(config_path: &std::path::Path) -> Result<()> {
     let gateway_res = GatewayOrchestrator::apply(&cfg).context(
         "gateway preparation failed (try running with root/sudo and check firewall permissions)",
     )?;
+    for note in &gateway_res.notes {
+        info!("{}", note);
+    }
     let enf_res = EnforcementOrchestrator::apply(&cfg)?;
     for note in enf_res.notes {
         info!("{}", note);
@@ -181,6 +187,19 @@ fn cmd_rollback(config_path: &std::path::Path) -> Result<()> {
     crate::audit::log(&cfg, "rollback_applied", &state.rollback_script)?;
     let _ = fs::remove_file(&cfg.runtime.state_file);
     println!("rollback complete: {}", state.rollback_script);
+    Ok(())
+}
+
+fn cmd_service_install(config_path: &std::path::Path) -> Result<()> {
+    let cfg = AppConfig::load(config_path)?;
+    let path = service::install(&cfg)?;
+    println!("service installed: {}", path);
+    Ok(())
+}
+
+fn cmd_service_uninstall() -> Result<()> {
+    let path = service::uninstall()?;
+    println!("service uninstalled: {}", path);
     Ok(())
 }
 

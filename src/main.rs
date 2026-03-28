@@ -5,6 +5,8 @@ mod config;
 mod enforcement;
 mod engine;
 mod gateway;
+mod platform;
+mod service;
 mod state;
 
 use anyhow::Result;

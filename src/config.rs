@@ -252,3 +252,22 @@ impl AppConfig {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_is_valid() {
+        let cfg = AppConfig::default();
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn policy_route_requires_targets() {
+        let mut cfg = AppConfig::default();
+        cfg.enforcement.mode = EnforcementMode::PolicyRoute;
+        cfg.enforcement.targets.clear();
+        assert!(cfg.validate().is_err());
+    }
+}

@@ -24,6 +24,8 @@ pub enum Commands {
     Stop,
     Status,
     Audit,
+    ServiceInstall,
+    ServiceUninstall,
     Rollback,
 }
 
