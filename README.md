@@ -18,6 +18,9 @@
 
 ```bash
 omnilan init
+omnilan kernel-install
+omnilan --engine mihomo kernel-install
+omnilan --engine sing-box kernel-install
 omnilan validate -c omnilan.yaml
 omnilan render -c omnilan.yaml
 omnilan --engine sing-box render -c omnilan.yaml
@@ -109,6 +112,7 @@ sudo ./target/release/omnilan run -c omnilan.yaml
 
 - 配置文件：`engine: mihomo | sing-box`
 - 临时覆盖：`--engine mihomo` 或 `--engine sing-box`
+- 自动安装：`omnilan kernel-install`（默认安装两者）
 
 ## 安全说明
 

@@ -37,6 +37,7 @@ pub enum Commands {
     Status,
     Audit,
     Doctor,
+    KernelInstall,
     ServiceInstall,
     ServiceUninstall,
     Rollback,

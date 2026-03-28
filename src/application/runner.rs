@@ -4,6 +4,7 @@ use crate::core::engine::from_config;
 use crate::core::gateway::GatewayOrchestrator;
 use crate::domain::config::AppConfig;
 use crate::domain::state::RuntimeState;
+use crate::infra::kernel;
 use crate::infra::platform;
 use crate::infra::service;
 use anyhow::{anyhow, Context, Result};
@@ -25,6 +26,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         Commands::Status => cmd_status(&cli.config, engine_override.as_ref()),
         Commands::Audit => cmd_audit(&cli.config, engine_override.as_ref()),
         Commands::Doctor => cmd_doctor(&cli.config, engine_override.as_ref()),
+        Commands::KernelInstall => cmd_kernel_install(&cli.config, engine_override.as_ref()),
         Commands::ServiceInstall => cmd_service_install(&cli.config, engine_override.as_ref()),
         Commands::ServiceUninstall => cmd_service_uninstall(),
         Commands::Rollback => cmd_rollback(&cli.config, engine_override.as_ref()),
@@ -251,6 +253,22 @@ fn cmd_doctor(config_path: &std::path::Path, engine_override: Option<&EngineArg>
     #[cfg(target_os = "windows")]
     {
         println!("netsh           : {}", platform::command_exists("netsh"));
+    }
+    Ok(())
+}
+
+fn cmd_kernel_install(
+    config_path: &std::path::Path,
+    engine_override: Option<&EngineArg>,
+) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
+    let target = engine_override.map(|v| match v {
+        EngineArg::Mihomo => crate::domain::config::EngineKind::Mihomo,
+        EngineArg::SingBox => crate::domain::config::EngineKind::SingBox,
+    });
+    let installed = kernel::install(&cfg, target)?;
+    for line in installed {
+        println!("{}", line);
     }
     Ok(())
 }

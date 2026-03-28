@@ -145,8 +145,8 @@ impl Default for AppConfig {
                 audit_file: base.join("audit.log"),
             },
             executables: Executables {
-                mihomo: "mihomo".to_string(),
-                sing_box: "sing-box".to_string(),
+                mihomo: base.join("bin/mihomo").display().to_string(),
+                sing_box: base.join("bin/sing-box").display().to_string(),
             },
             inbound: InboundConfig {
                 bind_address: "0.0.0.0".to_string(),
