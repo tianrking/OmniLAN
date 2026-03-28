@@ -1,4 +1,4 @@
-use crate::cli::{Cli, Commands};
+use crate::cli::{Cli, Commands, EngineArg};
 use crate::core::enforcement::{execute_rollback, write_rollback_script, EnforcementOrchestrator};
 use crate::core::engine::from_config;
 use crate::core::gateway::GatewayOrchestrator;
@@ -15,18 +15,19 @@ use tokio::signal;
 use tracing::{info, warn};
 
 pub async fn run(cli: Cli) -> Result<()> {
+    let engine_override = cli.engine.clone();
     match cli.command {
         Commands::Init => cmd_init(&cli.config),
-        Commands::Validate => cmd_validate(&cli.config),
-        Commands::Render => cmd_render(&cli.config),
-        Commands::Run => cmd_run(&cli.config).await,
-        Commands::Stop { rollback } => cmd_stop(&cli.config, rollback),
-        Commands::Status => cmd_status(&cli.config),
-        Commands::Audit => cmd_audit(&cli.config),
-        Commands::Doctor => cmd_doctor(&cli.config),
-        Commands::ServiceInstall => cmd_service_install(&cli.config),
+        Commands::Validate => cmd_validate(&cli.config, engine_override.as_ref()),
+        Commands::Render => cmd_render(&cli.config, engine_override.as_ref()),
+        Commands::Run => cmd_run(&cli.config, engine_override.as_ref()).await,
+        Commands::Stop { rollback } => cmd_stop(&cli.config, engine_override.as_ref(), rollback),
+        Commands::Status => cmd_status(&cli.config, engine_override.as_ref()),
+        Commands::Audit => cmd_audit(&cli.config, engine_override.as_ref()),
+        Commands::Doctor => cmd_doctor(&cli.config, engine_override.as_ref()),
+        Commands::ServiceInstall => cmd_service_install(&cli.config, engine_override.as_ref()),
         Commands::ServiceUninstall => cmd_service_uninstall(),
-        Commands::Rollback => cmd_rollback(&cli.config),
+        Commands::Rollback => cmd_rollback(&cli.config, engine_override.as_ref()),
     }
 }
 
@@ -36,8 +37,8 @@ fn cmd_init(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn cmd_validate(config_path: &std::path::Path) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+fn cmd_validate(config_path: &std::path::Path, engine_override: Option<&EngineArg>) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     let engine = from_config(&cfg);
     engine.ensure_binary(&cfg)?;
     println!(
@@ -48,8 +49,8 @@ fn cmd_validate(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn cmd_render(config_path: &std::path::Path) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+fn cmd_render(config_path: &std::path::Path, engine_override: Option<&EngineArg>) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     let engine = from_config(&cfg);
     engine.ensure_binary(&cfg)?;
     let artifacts = engine.prepare(&cfg)?;
@@ -61,8 +62,8 @@ fn cmd_render(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_run(config_path: &std::path::Path) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+async fn cmd_run(config_path: &std::path::Path, engine_override: Option<&EngineArg>) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     let engine = from_config(&cfg);
     engine.ensure_binary(&cfg)?;
 
@@ -132,8 +133,8 @@ async fn cmd_run(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn cmd_status(config_path: &std::path::Path) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+fn cmd_status(config_path: &std::path::Path, engine_override: Option<&EngineArg>) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     let state = RuntimeState::load(&cfg.runtime.state_file)?;
     println!("started_at : {}", state.started_at);
     println!("engine     : {}", state.engine);
@@ -150,8 +151,12 @@ fn cmd_status(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn cmd_stop(config_path: &std::path::Path, rollback: bool) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+fn cmd_stop(
+    config_path: &std::path::Path,
+    engine_override: Option<&EngineArg>,
+    rollback: bool,
+) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     let state = RuntimeState::load(&cfg.runtime.state_file)?;
     let pid = state
         .child_pid
@@ -169,8 +174,8 @@ fn cmd_stop(config_path: &std::path::Path, rollback: bool) -> Result<()> {
     Ok(())
 }
 
-fn cmd_audit(config_path: &std::path::Path) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+fn cmd_audit(config_path: &std::path::Path, engine_override: Option<&EngineArg>) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     if !cfg.runtime.audit_file.exists() {
         println!("audit log not found: {}", cfg.runtime.audit_file.display());
         return Ok(());
@@ -189,8 +194,8 @@ fn cmd_audit(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn cmd_rollback(config_path: &std::path::Path) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+fn cmd_rollback(config_path: &std::path::Path, engine_override: Option<&EngineArg>) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     let state = RuntimeState::load(&cfg.runtime.state_file)?;
     execute_rollback(&std::path::PathBuf::from(&state.rollback_script))?;
     crate::infra::audit::log(&cfg, "rollback_applied", &state.rollback_script)?;
@@ -199,8 +204,11 @@ fn cmd_rollback(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-fn cmd_service_install(config_path: &std::path::Path) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+fn cmd_service_install(
+    config_path: &std::path::Path,
+    engine_override: Option<&EngineArg>,
+) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     let path = service::install(&cfg, config_path)?;
     println!("service installed: {}", path);
     Ok(())
@@ -212,10 +220,11 @@ fn cmd_service_uninstall() -> Result<()> {
     Ok(())
 }
 
-fn cmd_doctor(config_path: &std::path::Path) -> Result<()> {
-    let cfg = AppConfig::load(config_path)?;
+fn cmd_doctor(config_path: &std::path::Path, engine_override: Option<&EngineArg>) -> Result<()> {
+    let cfg = load_config(config_path, engine_override)?;
     let caps = platform::capabilities();
     println!("platform        : {}", caps.os);
+    println!("engine          : {}", cfg.engine.as_str());
     println!("gateway         : {}", caps.gateway);
     println!("policy_route_ip : {}", caps.policy_route_ip);
     println!("policy_route_mac: {}", caps.policy_route_mac);
@@ -244,6 +253,20 @@ fn cmd_doctor(config_path: &std::path::Path) -> Result<()> {
         println!("netsh           : {}", platform::command_exists("netsh"));
     }
     Ok(())
+}
+
+fn load_config(
+    config_path: &std::path::Path,
+    engine_override: Option<&EngineArg>,
+) -> Result<AppConfig> {
+    let mut cfg = AppConfig::load(config_path)?;
+    if let Some(override_engine) = engine_override {
+        cfg.engine = match override_engine {
+            EngineArg::Mihomo => crate::domain::config::EngineKind::Mihomo,
+            EngineArg::SingBox => crate::domain::config::EngineKind::SingBox,
+        };
+    }
+    Ok(cfg)
 }
 
 fn is_pid_running(pid: Option<u32>) -> Result<bool> {

@@ -20,6 +20,7 @@
 omnilan init
 omnilan validate -c omnilan.yaml
 omnilan render -c omnilan.yaml
+omnilan --engine sing-box render -c omnilan.yaml
 sudo omnilan run -c omnilan.yaml
 omnilan stop -c omnilan.yaml
 omnilan stop --rollback -c omnilan.yaml
@@ -81,6 +82,7 @@ sudo ./target/release/omnilan run -c omnilan.yaml
 ## 内核与扩展
 
 - 双核心支持：`mihomo` / `sing-box`
+- 运行模式：OmniLAN 负责控制平面与编排，数据平面调用 `mihomo/sing-box` 内核执行
 - 引擎适配器模式：后续扩展 Hysteria/TUIC/Xray 更直接
 - 配置层统一：平台行为不散落在脚本中，便于持续演进
 - 强制接入策略层：`gateway-only / dhcp-assist / policy-route`
@@ -102,6 +104,11 @@ sudo ./target/release/omnilan run -c omnilan.yaml
 - Policy Route：针对目标设备 `IP/MAC` 做透明代理重定向
 - 透明转发：`TUN + NAT + DNS` 组合，设备无需安装客户端
 - 回滚与审计：自动生成 `rollback.sh` + `audit.log`
+
+## 内核选择方式
+
+- 配置文件：`engine: mihomo | sing-box`
+- 临时覆盖：`--engine mihomo` 或 `--engine sing-box`
 
 ## 安全说明
 

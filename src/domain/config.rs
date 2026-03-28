@@ -10,6 +10,15 @@ pub enum EngineKind {
     SingBox,
 }
 
+impl EngineKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EngineKind::Mihomo => "mihomo",
+            EngineKind::SingBox => "sing-box",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProxySourceMode {
