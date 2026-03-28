@@ -1,4 +1,4 @@
-use crate::config::AppConfig;
+use crate::domain::config::AppConfig;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use serde_json::json;

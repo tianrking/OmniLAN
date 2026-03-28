@@ -1,7 +1,7 @@
 mod mihomo;
 mod singbox;
 
-use crate::config::{AppConfig, EngineKind};
+use crate::domain::config::{AppConfig, EngineKind};
 use anyhow::Result;
 use std::path::PathBuf;
 use tokio::process::Command;

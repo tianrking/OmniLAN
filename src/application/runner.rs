@@ -1,11 +1,11 @@
 use crate::cli::{Cli, Commands};
-use crate::config::AppConfig;
-use crate::enforcement::{execute_rollback, write_rollback_script, EnforcementOrchestrator};
-use crate::engine::from_config;
-use crate::gateway::GatewayOrchestrator;
-use crate::platform;
-use crate::service;
-use crate::state::RuntimeState;
+use crate::core::enforcement::{execute_rollback, write_rollback_script, EnforcementOrchestrator};
+use crate::core::engine::from_config;
+use crate::core::gateway::GatewayOrchestrator;
+use crate::domain::config::AppConfig;
+use crate::domain::state::RuntimeState;
+use crate::infra::platform;
+use crate::infra::service;
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use std::fs;
@@ -66,7 +66,7 @@ async fn cmd_run(config_path: &std::path::Path) -> Result<()> {
     let engine = from_config(&cfg);
     engine.ensure_binary(&cfg)?;
 
-    crate::audit::log(&cfg, "run_start", &format!("engine={}", engine.name()))?;
+    crate::infra::audit::log(&cfg, "run_start", &format!("engine={}", engine.name()))?;
 
     let gateway_res = GatewayOrchestrator::apply(&cfg).context(
         "gateway preparation failed (try running with root/sudo and check firewall permissions)",
@@ -91,7 +91,7 @@ async fn cmd_run(config_path: &std::path::Path) -> Result<()> {
         child_pid,
         artifacts.render_path.display()
     );
-    crate::audit::log(
+    crate::infra::audit::log(
         &cfg,
         "engine_started",
         &format!("engine={} child_pid={:?}", engine.name(), child_pid),
@@ -118,14 +118,14 @@ async fn cmd_run(config_path: &std::path::Path) -> Result<()> {
         result = child.wait() => {
             let status = result.context("failed waiting for child process")?;
             warn!("engine exited with status: {}", status);
-            crate::audit::log(&cfg, "engine_exit", &format!("status={}", status))?;
+            crate::infra::audit::log(&cfg, "engine_exit", &format!("status={}", status))?;
         }
         _ = signal::ctrl_c() => {
             warn!("received ctrl-c, shutting down engine process");
             if let Err(e) = child.kill().await {
                 warn!("failed to kill child process: {}", e);
             }
-            crate::audit::log(&cfg, "engine_stop_signal", "ctrl-c")?;
+            crate::infra::audit::log(&cfg, "engine_stop_signal", "ctrl-c")?;
         }
     }
 
@@ -157,7 +157,7 @@ fn cmd_stop(config_path: &std::path::Path) -> Result<()> {
         .child_pid
         .ok_or_else(|| anyhow!("no child pid recorded in state"))?;
     stop_pid(pid)?;
-    crate::audit::log(&cfg, "engine_stopped", &format!("pid={}", pid))?;
+    crate::infra::audit::log(&cfg, "engine_stopped", &format!("pid={}", pid))?;
     println!("stopped child process: {}", pid);
     Ok(())
 }
@@ -186,7 +186,7 @@ fn cmd_rollback(config_path: &std::path::Path) -> Result<()> {
     let cfg = AppConfig::load(config_path)?;
     let state = RuntimeState::load(&cfg.runtime.state_file)?;
     execute_rollback(&std::path::PathBuf::from(&state.rollback_script))?;
-    crate::audit::log(&cfg, "rollback_applied", &state.rollback_script)?;
+    crate::infra::audit::log(&cfg, "rollback_applied", &state.rollback_script)?;
     let _ = fs::remove_file(&cfg.runtime.state_file);
     println!("rollback complete: {}", state.rollback_script);
     Ok(())
@@ -215,8 +215,8 @@ fn cmd_doctor(config_path: &std::path::Path) -> Result<()> {
     println!("service         : {}", caps.service);
 
     let engine_bin = match cfg.engine {
-        crate::config::EngineKind::Mihomo => cfg.executables.mihomo.as_str(),
-        crate::config::EngineKind::SingBox => cfg.executables.sing_box.as_str(),
+        crate::domain::config::EngineKind::Mihomo => cfg.executables.mihomo.as_str(),
+        crate::domain::config::EngineKind::SingBox => cfg.executables.sing_box.as_str(),
     };
     println!(
         "engine_bin      : {} ({})",

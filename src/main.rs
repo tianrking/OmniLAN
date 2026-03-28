@@ -1,13 +1,8 @@
-mod app;
-mod audit;
+mod application;
 mod cli;
-mod config;
-mod enforcement;
-mod engine;
-mod gateway;
-mod platform;
-mod service;
-mod state;
+mod core;
+mod domain;
+mod infra;
 
 use anyhow::Result;
 use tracing_subscriber::EnvFilter;
@@ -23,5 +18,5 @@ async fn main() -> Result<()> {
         .init();
 
     let args = cli::Cli::parse_args();
-    app::run(args).await
+    application::runner::run(args).await
 }

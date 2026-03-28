@@ -1,6 +1,6 @@
-use crate::audit;
-use crate::config::{AppConfig, DeviceRule, EnforcementMode};
-use crate::platform;
+use crate::domain::config::{AppConfig, DeviceRule, EnforcementMode};
+use crate::infra::audit;
+use crate::infra::platform;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;

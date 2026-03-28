@@ -45,40 +45,36 @@ sudo ./target/release/omnilan run -c omnilan.yaml
 
 ## 架构
 
-1. `src/config.rs`
-- 配置模型、默认配置、校验逻辑
+采用分层架构（`cli / application / domain / core / infra`）：
 
-2. `src/engine/*`
-- `Engine` trait：统一 `ensure_binary / prepare / command`
-- `mihomo.rs`：生成 `mihomo.generated.yaml`
-- `singbox.rs`：生成 `sing-box.generated.json`
+1. `src/cli/`
+- 命令定义与参数入口
 
-3. `src/gateway/mod.rs`
-- 系统网关能力编排：IP forwarding + NAT + DNS 劫持转发（Linux）
+2. `src/application/`
+- 命令流程编排、运行生命周期、诊断输出
 
-4. `src/enforcement.rs`
-- `dhcp-assist`：生成 dnsmasq 可用配置（可选自动部署）
-- `policy-route`：按设备 IP/MAC 强制透明重定向到代理端口
-- 自动输出 rollback 脚本，支持一键撤销
+3. `src/domain/`
+- 配置模型与状态快照（纯数据层）
 
-5. `src/app.rs`
-- CLI 命令生命周期：init/validate/render/run/stop/status/audit/rollback
-- 进程管理、信号退出、状态写入
+4. `src/core/engine/`
+- `Engine` trait 与双内核实现（mihomo/sing-box）
 
-6. `src/state.rs`
-- 运行状态快照（PID、启动时间、渲染文件、rollback、audit）
+5. `src/core/gateway/`
+- 网关能力编排入口
 
-7. `src/audit.rs`
-- 审计日志（JSONL），记录策略应用、启动、退出、回滚等事件
+6. `src/core/enforcement/`
+- DHCP Assist、Policy Route、回滚脚本输出
 
-8. `src/platform.rs`
-- 跨平台网络适配层（Linux/macOS/Windows）
-- Linux 提供完整规则下发（iptables）
-- macOS 提供 `pf` anchor 自动规则装载（gateway + policy route）
-- Windows 提供能力探测与服务化，网关策略适配持续完善中
+7. `src/infra/platform/`
+- 跨平台网络适配实现（Linux/macOS/Windows）
 
-9. `src/service.rs`
-- 系统服务管理：systemd / launchd / Windows 计划任务
+8. `src/infra/service/`
+- systemd / launchd / Windows 任务计划服务管理
+
+9. `src/infra/audit/`
+- JSONL 审计日志
+
+详细设计文档见：`docs/ARCHITECTURE.md`
 
 ## 内核与扩展
 

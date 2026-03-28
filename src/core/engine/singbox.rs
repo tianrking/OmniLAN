@@ -1,5 +1,5 @@
-use crate::config::{AppConfig, ProxySourceMode, RouteMode};
-use crate::engine::{Engine, EngineArtifacts};
+use crate::core::engine::{Engine, EngineArtifacts};
+use crate::domain::config::{AppConfig, ProxySourceMode, RouteMode};
 use anyhow::{Context, Result};
 use std::fs;
 use tokio::process::Command;

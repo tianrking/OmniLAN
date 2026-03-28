@@ -1,4 +1,4 @@
-use crate::config::AppConfig;
+use crate::domain::config::AppConfig;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;

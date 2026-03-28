@@ -1,5 +1,5 @@
-use crate::config::AppConfig;
-use crate::platform;
+use crate::domain::config::AppConfig;
+use crate::infra::platform;
 use anyhow::Result;
 
 pub struct GatewayOrchestrator;
