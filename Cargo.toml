@@ -1,0 +1,19 @@
+[package]
+name = "ok-proxy"
+version = "0.1.0"
+edition = "2021"
+description = "A modern LAN proxy gateway orchestrator powered by Rust"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+tokio = { version = "1.45", features = ["macros", "rt-multi-thread", "signal", "process", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6.0"
+which = "8.0"

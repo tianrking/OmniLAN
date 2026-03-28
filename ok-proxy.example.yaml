@@ -1,0 +1,50 @@
+engine: mihomo
+
+runtime:
+  work_dir: /Users/yourname/.ok-proxy
+  state_file: /Users/yourname/.ok-proxy/state.json
+  audit_file: /Users/yourname/.ok-proxy/audit.log
+
+executables:
+  mihomo: mihomo
+  sing_box: sing-box
+
+inbound:
+  bind_address: 0.0.0.0
+  mixed_port: 7890
+  redir_port: 7892
+  dns_port: 5353
+  api_port: 9090
+
+source:
+  mode: subscription
+  subscription_url: "https://your-subscription-url"
+  local_file: null
+  provider_name: "default-subscription"
+
+gateway:
+  interface: null
+  lan_cidr: "192.168.0.0/16"
+  auto_ip_forward: true
+  auto_nat: true
+
+enforcement:
+  mode: policy-route
+  targets:
+    - "switch"
+
+routing:
+  mode: rule
+  domestic_direct: true
+  block_ads: true
+
+device_policy:
+  mode: allowlist
+  allowlist:
+    - name: "switch"
+      ip: "192.168.1.120"
+      mac: "AA:BB:CC:DD:EE:FF"
+
+security:
+  allow_unsafe_experimental: false
+  enable_audit_log: true
